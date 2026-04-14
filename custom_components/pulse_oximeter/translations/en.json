@@ -1,0 +1,14 @@
+{
+  "title": "Pulse Oximeter (BLE)",
+  "config": {
+    "step": {
+      "bluetooth_confirm": {
+        "description": "Set up {name} as a pulse oximeter?"
+      }
+    },
+    "abort": {
+      "already_configured": "Device is already configured",
+      "bluetooth_only": "This integration can only be set up via Bluetooth discovery. Make sure your pulse oximeter is on and within range."
+    }
+  }
+}
