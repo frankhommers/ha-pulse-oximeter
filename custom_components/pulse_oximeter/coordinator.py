@@ -185,14 +185,12 @@ class OxiCoordinator(DataUpdateCoordinator[OxiData]):
             _LOGGER.info("Connected to %s", self.address)
             self.data.connected = True
 
-            # Read device info
-            await self._async_read_device_info()
-
-            # Read battery
-            await self._async_read_battery()
-
-            # Subscribe to PLX notifications
+            # Subscribe to PLX notifications first - this is the critical path
             await self._async_subscribe()
+
+            # Read device info and battery after subscription is active
+            await self._async_read_device_info()
+            await self._async_read_battery()
 
             self.async_set_updated_data(self.data)
 
@@ -268,21 +266,62 @@ class OxiCoordinator(DataUpdateCoordinator[OxiData]):
         if not self._client or not self._client.is_connected:
             return
 
+        subscribed_continuous = False
+        subscribed_spot_check = False
+
         for service in self._client.services:
             for char in service.characteristics:
                 uuid = char.uuid.lower()
                 if uuid == PLX_CONTINUOUS_UUID:
-                    if "notify" in char.properties:
-                        await self._client.start_notify(
-                            PLX_CONTINUOUS_UUID, self._on_continuous
+                    if "notify" in char.properties or "indicate" in char.properties:
+                        try:
+                            await self._client.start_notify(
+                                PLX_CONTINUOUS_UUID, self._on_continuous
+                            )
+                            subscribed_continuous = True
+                            _LOGGER.debug("Subscribed to PLX Continuous")
+                        except (BleakError, TimeoutError, OSError) as err:
+                            _LOGGER.warning(
+                                "Failed to subscribe to PLX Continuous on %s: %s",
+                                self.address,
+                                err,
+                            )
+                    else:
+                        _LOGGER.warning(
+                            "PLX Continuous characteristic found on %s but has no "
+                            "notify/indicate property (properties: %s)",
+                            self.address,
+                            char.properties,
                         )
-                        _LOGGER.debug("Subscribed to PLX Continuous")
                 if uuid == PLX_SPOT_CHECK_UUID:
-                    if "indicate" in char.properties or "notify" in char.properties:
-                        await self._client.start_notify(
-                            PLX_SPOT_CHECK_UUID, self._on_spot_check
+                    if "notify" in char.properties or "indicate" in char.properties:
+                        try:
+                            await self._client.start_notify(
+                                PLX_SPOT_CHECK_UUID, self._on_spot_check
+                            )
+                            subscribed_spot_check = True
+                            _LOGGER.debug("Subscribed to PLX Spot-Check")
+                        except (BleakError, TimeoutError, OSError) as err:
+                            _LOGGER.warning(
+                                "Failed to subscribe to PLX Spot-Check on %s: %s",
+                                self.address,
+                                err,
+                            )
+                    else:
+                        _LOGGER.warning(
+                            "PLX Spot-Check characteristic found on %s but has no "
+                            "notify/indicate property (properties: %s)",
+                            self.address,
+                            char.properties,
                         )
-                        _LOGGER.debug("Subscribed to PLX Spot-Check")
+
+        if not subscribed_continuous and not subscribed_spot_check:
+            _LOGGER.warning(
+                "No PLX measurement characteristics subscribed on %s. "
+                "No measurements will be received. Disconnecting and retrying.",
+                self.address,
+            )
+            raise BleakError("No PLX characteristics could be subscribed")
 
     @callback
     def _on_continuous(self, sender: int, data: bytearray) -> None:
