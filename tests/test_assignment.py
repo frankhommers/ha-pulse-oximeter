@@ -124,3 +124,25 @@ def test_listener_called_on_changes(manager):
     manager.new_measurement(make_summary(1))
     manager.assign(FRANK)
     assert len(calls) == 2
+
+
+def test_same_target_is_noop_without_events(manager, events):
+    manager.new_measurement(make_summary(1))
+    assert manager.assign(FRANK)
+    events_before = len(events)
+    assert manager.assign(FRANK)  # same target again
+    assert len(events) == events_before  # no duplicate events
+
+
+def test_faulty_then_reclaim(manager):
+    manager.new_measurement(make_summary(1))
+    manager.assign(FAULTY)
+    assert manager.assign(FRANK)
+    assert manager.assigned_to == FRANK
+    assert manager.person_values[FRANK].spo2 == 97.0
+
+
+def test_source_defaults_to_service(manager, events):
+    manager.new_measurement(make_summary(1))
+    manager.assign(FRANK)
+    assert events[-1][1]["source"] == "service"
