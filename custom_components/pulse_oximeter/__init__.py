@@ -8,6 +8,7 @@ import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall, callback
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
@@ -75,7 +76,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     @callback
     def _on_session_finished(summary: MeasurementSummary) -> None:
         manager.new_measurement(summary)
-        hass.async_create_task(notifier.async_send(summary))
+        entry.async_create_background_task(
+            hass, notifier.async_send(summary), name="pulse_oximeter_notify"
+        )
 
     coordinator.session_callback = _on_session_finished
 
@@ -108,7 +111,14 @@ def _async_register_services(hass: HomeAssistant) -> None:
         person = call.data.get("person")
         faulty = call.data["faulty"]
         target = FAULTY if faulty else person
-        for data in hass.data.get(DOMAIN, {}).values():
+        entries = list(hass.data.get(DOMAIN, {}).values())
+        if person and not faulty and not any(
+            person in data.manager.participants for data in entries
+        ):
+            raise ServiceValidationError(
+                f"{person} is not a configured participant"
+            )
+        for data in entries:
             data.manager.assign(target, source="service")
 
     hass.services.async_register(
@@ -120,6 +130,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     data: RuntimeData = hass.data[DOMAIN][entry.entry_id]
     data.notifier.async_unload()
+    data.coordinator.session_callback = None
     await data.coordinator.async_stop()
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

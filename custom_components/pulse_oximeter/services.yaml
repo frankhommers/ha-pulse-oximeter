@@ -13,7 +13,7 @@ assign_measurement:
           domain: person
     faulty:
       name: Faulty measurement
-      description: Discard the latest measurement as faulty.
+      description: Discard the latest measurement as faulty. Takes precedence over person.
       required: false
       default: false
       selector:
