@@ -5,14 +5,17 @@ from __future__ import annotations
 import asyncio
 import logging
 import struct
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from itertools import count
 
 from bleak import BleakClient, BleakError
 from bleak_retry_connector import establish_connection
 
 from homeassistant.components.bluetooth import async_ble_device_from_address
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
@@ -23,7 +26,9 @@ from .const import (
     MODEL_NUMBER_UUID,
     PLX_CONTINUOUS_UUID,
     PLX_SPOT_CHECK_UUID,
+    SESSION_INACTIVITY_TIMEOUT,
 )
+from .measurement import MeasurementSummary, ReadingCollector
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -153,6 +158,10 @@ class OxiCoordinator(DataUpdateCoordinator[OxiData]):
         self._disconnect_timer: asyncio.TimerHandle | None = None
         self._reconnect_task: asyncio.Task | None = None
         self._expected_disconnect = False
+        self._collector: ReadingCollector | None = None
+        self._measurement_ids = count(1)
+        self._inactivity_unsub: Callable[[], None] | None = None
+        self.session_callback: Callable[[MeasurementSummary], None] | None = None
 
     async def async_start(self) -> None:
         """Start the coordinator - connect to device."""
@@ -164,6 +173,7 @@ class OxiCoordinator(DataUpdateCoordinator[OxiData]):
         if self._reconnect_task:
             self._reconnect_task.cancel()
             self._reconnect_task = None
+        self._finalize_session()
         await self._async_disconnect()
 
     async def _async_connect(self) -> None:
@@ -214,6 +224,7 @@ class OxiCoordinator(DataUpdateCoordinator[OxiData]):
         """Handle unexpected disconnection."""
         _LOGGER.info("Disconnected from %s", self.address)
         self._client = None
+        self._finalize_session()
         self.data.connected = False
         self.async_set_updated_data(self.data)
 
@@ -358,7 +369,53 @@ class OxiCoordinator(DataUpdateCoordinator[OxiData]):
         if (spo2 is not None and spo2 > 0) or (pr is not None and pr > 0):
             self.data.last_measured = datetime.now(timezone.utc)
 
+        has_valid = (spo2 is not None and spo2 > 0) or (pr is not None and pr > 0)
+        if has_valid:
+            if self._collector is None:
+                self._collector = ReadingCollector(next(self._measurement_ids))
+                _LOGGER.debug(
+                    "Measurement %d started", self._collector.measurement_id
+                )
+            self._collector.add(spo2, pr, pi)
+            self._reset_inactivity_timer()
+
         self.async_set_updated_data(self.data)
+
+    def _reset_inactivity_timer(self) -> None:
+        """(Re)start the timer that ends a session after silence."""
+        if self._inactivity_unsub:
+            self._inactivity_unsub()
+        self._inactivity_unsub = async_call_later(
+            self.hass, SESSION_INACTIVITY_TIMEOUT, self._on_inactivity
+        )
+
+    @callback
+    def _on_inactivity(self, _now) -> None:
+        self._inactivity_unsub = None
+        self._finalize_session()
+
+    @callback
+    def _finalize_session(self) -> None:
+        """End the current measurement session, if any."""
+        if self._inactivity_unsub:
+            self._inactivity_unsub()
+            self._inactivity_unsub = None
+        if self._collector is None:
+            return
+        summary = self._collector.finalize()
+        self._collector = None
+        if summary is None:
+            _LOGGER.debug("Measurement discarded (too few valid readings)")
+            return
+        _LOGGER.info(
+            "Measurement %d finished: SpO2 %.1f%%, pulse %.1f bpm (%d readings)",
+            summary.measurement_id,
+            summary.spo2,
+            summary.pulse_rate,
+            summary.readings,
+        )
+        if self.session_callback:
+            self.session_callback(summary)
 
     async def _async_update_data(self) -> OxiData:
         """Fallback polling - not used for push-based data."""
