@@ -149,10 +149,11 @@ class OxiOptionsFlow(OptionsFlow):
         existing = self.config_entry.options.get(CONF_NOTIFY_TARGETS, {})
         schema_dict = {}
         for person in self._participants:
+            stored = existing.get(person)
             default = (
-                existing.get(person)
-                or suggest_notify_target(self.hass, person)
-                or "none"
+                stored
+                if stored in select_options
+                else suggest_notify_target(self.hass, person) or "none"
             )
             schema_dict[vol.Required(person, default=default)] = (
                 selector.SelectSelector(
