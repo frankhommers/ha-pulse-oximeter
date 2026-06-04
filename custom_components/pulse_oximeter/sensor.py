@@ -225,6 +225,9 @@ class PersonOxiSensor(RestoreSensor):
         values = self._manager.person_values.get(self._person_entity_id)
         if values is not None:
             return getattr(values, self.entity_description.key)
+        # Restored value is intentionally retained across restarts even if a
+        # newer measurement is later unassigned: it is history, not a live
+        # assignment (only the latest measurement is mutable, per design).
         return self._restored_value
 
     @property

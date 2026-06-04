@@ -72,7 +72,7 @@ Three buttons — exactly the Android maximum.
 ## Entities
 
 **Per participating person** (chosen in options), grouped under a per-person
-device ("Pulse Oximeter — Frank"):
+device ("Pulse Oximeter Frank"):
 
 - `sensor.<person>_spo2`, `sensor.<person>_pulse_rate`,
   `sensor.<person>_perfusion_index` — values from the last claimed
