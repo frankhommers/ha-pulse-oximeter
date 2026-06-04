@@ -47,6 +47,32 @@ The integration connects to the pulse oximeter via BLE and subscribes to real-ti
 
 Zero readings (finger not properly placed) are filtered out.
 
+## Assigning measurements to persons
+
+The oximeter itself does not know who is wearing it. This integration links
+measurements to Home Assistant persons via explicit claiming:
+
+1. Open the integration's **Options** and select the participating persons,
+   plus the phone (companion app) of each participant.
+2. After each measurement (finger on → finger off) every configured phone
+   receives an actionable notification: *"Measurement 14:32 — SpO2 97%,
+   pulse 72 bpm. Yours?"* with three buttons: **Mine**, **Not mine**, and
+   **Faulty measurement**.
+3. Tapping **Mine** assigns the measurement to you: your personal sensors
+   (e.g. `sensor.pulse_oximeter_frank_spo2`) update and build per-person
+   history. The notification disappears on all phones.
+4. **Not mine** dismisses it on your phone only; **Faulty measurement**
+   discards it for everyone.
+5. Unclaimed measurements enter no one's history. The
+   **Last measurement** select entity on the device page lets you (re)assign
+   the latest measurement from the dashboard at any time.
+
+For custom automations: the integration fires
+`pulse_oximeter_measurement_finished` and
+`pulse_oximeter_measurement_assigned` events and provides the
+`pulse_oximeter.assign_measurement` service. Built-in notifications can be
+disabled in the options.
+
 ## Tested devices
 
 | Device | Manufacturer | Model | Status |
