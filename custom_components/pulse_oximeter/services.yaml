@@ -1,0 +1,20 @@
+assign_measurement:
+  name: Assign measurement
+  description: >-
+    Assign the latest measurement to a person, unassign it, or mark it as
+    faulty.
+  fields:
+    person:
+      name: Person
+      description: Person to assign the latest measurement to. Leave empty to unassign.
+      required: false
+      selector:
+        entity:
+          domain: person
+    faulty:
+      name: Faulty measurement
+      description: Discard the latest measurement as faulty.
+      required: false
+      default: false
+      selector:
+        boolean:
