@@ -118,6 +118,7 @@ def _async_register_services(hass: HomeAssistant) -> None:
             raise ServiceValidationError(
                 f"{person} is not a configured participant"
             )
+        # v1: a service call applies to all entries; managers reject non-participants.
         for data in entries:
             data.manager.assign(target, source="service")
 

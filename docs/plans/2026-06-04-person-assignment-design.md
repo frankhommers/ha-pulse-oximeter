@@ -55,7 +55,7 @@ notification:
 Three buttons — exactly the Android maximum.
 
 - Action IDs encode measurement ID + person, pipe-delimited because person
-  entity IDs contain underscores (e.g. `PULSEOX|MINE|42|person.frank`), so
+  entity IDs contain underscores (e.g. `PULSEOX|<entry_id>|MINE|42|person.frank`), so
   the integration always knows who answered
 - **Voor mij** → assign to that phone's person → `clear_notification` on all
   phones
