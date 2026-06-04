@@ -1,3 +1,10 @@
 pytest-homeassistant-custom-component==0.13.316
 bleak>=0.21.0
 bleak-retry-connector>=3.5.0
+aiousbwatcher
+pyserial
+dbus-fast
+bluetooth-adapters
+bluetooth-auto-recovery
+bluetooth-data-tools
+habluetooth
