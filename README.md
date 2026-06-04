@@ -59,8 +59,9 @@ measurements to Home Assistant persons via explicit claiming:
    pulse 72 bpm. Yours?"* with three buttons: **Mine**, **Not mine**, and
    **Faulty measurement**.
 3. Tapping **Mine** assigns the measurement to you: your personal sensors
-   (e.g. `sensor.pulse_oximeter_frank_spo2`) update and build per-person
-   history. The notification disappears on all phones.
+   (e.g. `sensor.pm_100_frank_spo2` — named after your device and person)
+   update and build per-person history. The notification disappears on all
+   phones.
 4. **Not mine** dismisses it on your phone only; **Faulty measurement**
    discards it for everyone.
 5. Unclaimed measurements enter no one's history. The
