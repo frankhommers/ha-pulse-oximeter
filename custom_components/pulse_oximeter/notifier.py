@@ -14,24 +14,27 @@ from .measurement import MeasurementSummary
 _LOGGER = logging.getLogger(__name__)
 
 
-def build_action_id(kind: str, measurement_id: int, person: str) -> str:
-    """Build a notification action ID encoding measurement and person."""
-    return f"{NOTIFY_ACTION_PREFIX}|{kind}|{measurement_id}|{person}"
+def build_action_id(
+    entry_id: str, kind: str, measurement_id: int, person: str
+) -> str:
+    """Build a notification action ID encoding entry, measurement and person."""
+    return f"{NOTIFY_ACTION_PREFIX}|{entry_id}|{kind}|{measurement_id}|{person}"
 
 
-def parse_action_id(action: str) -> tuple[str, int, str] | None:
-    """Parse an action ID; None if it is not ours."""
+def parse_action_id(action: str) -> tuple[str, str, int, str] | None:
+    """Parse an action ID into (entry_id, kind, mid, person); None if not ours."""
     parts = action.split("|")
-    if len(parts) != 4 or parts[0] != NOTIFY_ACTION_PREFIX:
+    if len(parts) != 5 or parts[0] != NOTIFY_ACTION_PREFIX:
         return None
     try:
-        return parts[1], int(parts[2]), parts[3]
+        return parts[1], parts[2], int(parts[3]), parts[4]
     except ValueError:
         return None
 
 
 def build_notification(
     summary: MeasurementSummary,
+    entry_id: str,
     person: str,
     tag: str,
     texts: dict[str, str],
@@ -50,15 +53,15 @@ def build_notification(
             "tag": tag,
             "actions": [
                 {
-                    "action": build_action_id("MINE", mid, person),
+                    "action": build_action_id(entry_id, "MINE", mid, person),
                     "title": texts["mine"],
                 },
                 {
-                    "action": build_action_id("NOTMINE", mid, person),
+                    "action": build_action_id(entry_id, "NOTMINE", mid, person),
                     "title": texts["not_mine"],
                 },
                 {
-                    "action": build_action_id("FAULTY", mid, person),
+                    "action": build_action_id(entry_id, "FAULTY", mid, person),
                     "title": texts["faulty"],
                 },
             ],
@@ -78,6 +81,7 @@ class MeasurementNotifier:
         enabled: bool,
     ) -> None:
         self.hass = hass
+        self.entry_id = entry_id
         self.manager = manager
         self.notify_targets = notify_targets
         self.enabled = enabled
@@ -104,7 +108,9 @@ class MeasurementNotifier:
             return
         texts = get_texts(self.hass.config.language)
         for person, target in self.notify_targets.items():
-            payload = build_notification(summary, person, self.tag, texts)
+            payload = build_notification(
+                summary, self.entry_id, person, self.tag, texts
+            )
             try:
                 await self.hass.services.async_call(
                     "notify", target, payload, blocking=True
@@ -133,25 +139,37 @@ class MeasurementNotifier:
 
     async def _on_action(self, event: Event) -> None:
         """Handle a mobile_app_notification_action event."""
-        parsed = parse_action_id(event.data.get("action", ""))
+        action = event.data.get("action")
+        if not isinstance(action, str):
+            return
+        parsed = parse_action_id(action)
         if parsed is None:
             return
-        kind, measurement_id, person = parsed
+        entry_id, kind, measurement_id, person = parsed
+        if entry_id != self.entry_id:
+            return
         if person not in self.notify_targets:
             return
 
-        if kind == "MINE":
-            if self.manager.assign(person, measurement_id, source="notification"):
-                await self.async_clear()
-        elif kind == "FAULTY":
-            if self.manager.assign(FAULTY, measurement_id, source="notification"):
-                await self.async_clear()
-        elif kind == "NOTMINE":
-            current = self.manager.current
-            if (
-                self.manager.assigned_to == person
-                and current is not None
-                and current.measurement_id == measurement_id
-            ):
-                self.manager.assign(None, measurement_id, source="notification")
-            await self.async_clear(only_person=person)
+        try:
+            if kind == "MINE":
+                if self.manager.assign(
+                    person, measurement_id, source="notification"
+                ):
+                    await self.async_clear()
+            elif kind == "FAULTY":
+                if self.manager.assign(
+                    FAULTY, measurement_id, source="notification"
+                ):
+                    await self.async_clear()
+            elif kind == "NOTMINE":
+                current = self.manager.current
+                if (
+                    self.manager.assigned_to == person
+                    and current is not None
+                    and current.measurement_id == measurement_id
+                ):
+                    self.manager.assign(None, measurement_id, source="notification")
+                await self.async_clear(only_person=person)
+        except Exception:  # noqa: BLE001 - must not escape the bus listener
+            _LOGGER.exception("Error handling notification action")

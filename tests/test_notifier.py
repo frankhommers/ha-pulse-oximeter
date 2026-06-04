@@ -40,20 +40,20 @@ def make_summary(measurement_id: int = 1) -> MeasurementSummary:
 
 
 def test_action_id_roundtrip():
-    action = build_action_id("MINE", 42, FRANK)
-    assert parse_action_id(action) == ("MINE", 42, FRANK)
+    action = build_action_id("entry1", "MINE", 42, FRANK)
+    assert parse_action_id(action) == ("entry1", "MINE", 42, FRANK)
 
 
 def test_parse_rejects_garbage():
     assert parse_action_id("") is None
-    assert parse_action_id("URLO|MINE|1|person.x") is None
-    assert parse_action_id("PULSEOX|MINE|abc|person.x") is None
-    assert parse_action_id("PULSEOX|MINE|1") is None
+    assert parse_action_id("URLO|entry1|MINE|1|person.x") is None
+    assert parse_action_id("PULSEOX|entry1|MINE|abc|person.x") is None
+    assert parse_action_id("PULSEOX|entry1|MINE|1") is None
 
 
 def test_build_notification_payload():
     payload = build_notification(
-        make_summary(7), FRANK, "pulseox_entry1", get_texts("nl")
+        make_summary(7), "entry1", FRANK, "pulseox_entry1", get_texts("nl")
     )
     assert payload["title"] == "Saturatiemeter"
     assert "97.0" in payload["message"]
@@ -61,7 +61,7 @@ def test_build_notification_payload():
     assert payload["data"]["tag"] == "pulseox_entry1"
     actions = payload["data"]["actions"]
     assert len(actions) == 3  # exactly the Android maximum
-    assert actions[0]["action"] == build_action_id("MINE", 7, FRANK)
+    assert actions[0]["action"] == build_action_id("entry1", "MINE", 7, FRANK)
     assert actions[0]["title"] == "Voor mij"
     assert actions[1]["title"] == "Niet voor mij"
     assert actions[2]["title"] == "Foutieve meting"
@@ -92,12 +92,12 @@ async def test_send_and_claim_flow(hass, manager):
     assert len(frank_calls) == 1
     assert len(anneke_calls) == 1
     assert frank_calls[0].data["data"]["actions"][0]["action"] == build_action_id(
-        "MINE", 1, FRANK
+        "entry1", "MINE", 1, FRANK
     )
 
     # Frank taps "Voor mij" -> assigned + cleared everywhere
     hass.bus.async_fire(
-        MOBILE_APP_ACTION_EVENT, {"action": build_action_id("MINE", 1, FRANK)}
+        MOBILE_APP_ACTION_EVENT, {"action": build_action_id("entry1", "MINE", 1, FRANK)}
     )
     await hass.async_block_till_done()
     assert manager.assigned_to == FRANK
@@ -119,7 +119,8 @@ async def test_not_mine_clears_only_own_phone(hass, manager):
     manager.new_measurement(make_summary(1))
 
     hass.bus.async_fire(
-        MOBILE_APP_ACTION_EVENT, {"action": build_action_id("NOTMINE", 1, ANNEKE)}
+        MOBILE_APP_ACTION_EVENT,
+        {"action": build_action_id("entry1", "NOTMINE", 1, ANNEKE)},
     )
     await hass.async_block_till_done()
     assert manager.assigned_to is None  # nothing was assigned to Anneke
@@ -137,7 +138,7 @@ async def test_faulty_clears_everywhere(hass, manager):
     manager.new_measurement(make_summary(1))
 
     hass.bus.async_fire(
-        MOBILE_APP_ACTION_EVENT, {"action": build_action_id("FAULTY", 1, FRANK)}
+        MOBILE_APP_ACTION_EVENT, {"action": build_action_id("entry1", "FAULTY", 1, FRANK)}
     )
     await hass.async_block_till_done()
     assert manager.assigned_to == FAULTY
@@ -154,7 +155,7 @@ async def test_stale_answer_ignored(hass, manager):
     manager.new_measurement(make_summary(2))
 
     hass.bus.async_fire(
-        MOBILE_APP_ACTION_EVENT, {"action": build_action_id("MINE", 1, FRANK)}
+        MOBILE_APP_ACTION_EVENT, {"action": build_action_id("entry1", "MINE", 1, FRANK)}
     )
     await hass.async_block_till_done()
     assert manager.assigned_to is None
@@ -170,3 +171,23 @@ async def test_disabled_sends_nothing(hass, manager):
     manager.new_measurement(summary)
     await notifier.async_send(summary)
     assert len(frank_calls) == 0
+
+
+async def test_cross_entry_actions_ignored(hass):
+    """A tap for entry1 must not assign on entry2 (counters collide)."""
+    async_mock_service(hass, "notify", "mobile_app_frank")
+    manager1 = AssignmentManager([FRANK], lambda n, d: None)
+    manager2 = AssignmentManager([FRANK], lambda n, d: None)
+    notifier1 = MeasurementNotifier(hass, "entry1", manager1, {FRANK: "mobile_app_frank"}, enabled=True)
+    notifier2 = MeasurementNotifier(hass, "entry2", manager2, {FRANK: "mobile_app_frank"}, enabled=True)
+    notifier1.async_setup()
+    notifier2.async_setup()
+    manager1.new_measurement(make_summary(1))
+    manager2.new_measurement(make_summary(1))  # same id — colliding counters
+
+    hass.bus.async_fire(
+        MOBILE_APP_ACTION_EVENT, {"action": build_action_id("entry1", "MINE", 1, FRANK)}
+    )
+    await hass.async_block_till_done()
+    assert manager1.assigned_to == FRANK
+    assert manager2.assigned_to is None  # must NOT be claimed
