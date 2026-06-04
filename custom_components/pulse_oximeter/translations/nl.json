@@ -1,0 +1,45 @@
+{
+  "title": "Saturatiemeter (BLE)",
+  "config": {
+    "step": {
+      "bluetooth_confirm": {
+        "description": "{name} instellen als saturatiemeter?"
+      }
+    },
+    "abort": {
+      "already_configured": "Apparaat is al geconfigureerd",
+      "bluetooth_only": "Deze integratie kan alleen via Bluetooth-detectie worden ingesteld. Zorg dat de saturatiemeter aan staat en binnen bereik is."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Metingen toewijzen",
+        "data": {
+          "participants": "Deelnemers (personen die dit apparaat gebruiken)",
+          "notifications_enabled": "Toewijzingsnotificaties versturen"
+        }
+      },
+      "targets": {
+        "title": "Notificatiedoelen",
+        "description": "Kies per deelnemer de telefoon (mobile_app notify-service)."
+      }
+    }
+  },
+  "services": {
+    "assign_measurement": {
+      "name": "Meting toewijzen",
+      "description": "Wijs de laatste meting toe aan een persoon, koppel hem los of markeer hem als foutief.",
+      "fields": {
+        "person": {
+          "name": "Persoon",
+          "description": "Persoon om de laatste meting aan toe te wijzen. Leeg laten om los te koppelen."
+        },
+        "faulty": {
+          "name": "Foutieve meting",
+          "description": "Gooi de laatste meting weg als foutief. Heeft voorrang op persoon."
+        }
+      }
+    }
+  }
+}

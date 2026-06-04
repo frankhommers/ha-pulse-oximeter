@@ -1,13 +1,13 @@
 {
   "domain": "pulse_oximeter",
   "name": "Pulse Oximeter (BLE)",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "codeowners": ["@frankhommers"],
   "config_flow": true,
   "documentation": "https://github.com/frankhommers/ha-pulse-oximeter",
   "iot_class": "local_push",
   "integration_type": "device",
-  "dependencies": ["bluetooth_adapters"],
+  "dependencies": ["bluetooth_adapters", "person"],
   "requirements": ["bleak>=0.21.0", "bleak-retry-connector>=3.5.0"],
   "bluetooth": [
     {

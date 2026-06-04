@@ -10,5 +10,36 @@
       "already_configured": "Device is already configured",
       "bluetooth_only": "This integration can only be set up via Bluetooth discovery. Make sure your pulse oximeter is on and within range."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Measurement assignment",
+        "data": {
+          "participants": "Participants (persons who use this device)",
+          "notifications_enabled": "Send assignment notifications"
+        }
+      },
+      "targets": {
+        "title": "Notification targets",
+        "description": "Pick the phone (mobile_app notify service) for each participant."
+      }
+    }
+  },
+  "services": {
+    "assign_measurement": {
+      "name": "Assign measurement",
+      "description": "Assign the latest measurement to a person, unassign it, or mark it as faulty.",
+      "fields": {
+        "person": {
+          "name": "Person",
+          "description": "Person to assign the latest measurement to. Leave empty to unassign."
+        },
+        "faulty": {
+          "name": "Faulty measurement",
+          "description": "Discard the latest measurement as faulty. Takes precedence over person."
+        }
+      }
+    }
   }
 }
