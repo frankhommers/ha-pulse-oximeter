@@ -54,3 +54,10 @@ def test_event_data_shape():
         "duration", "measured_at", "readings",
     ):
         assert key in data
+
+
+def test_pulse_only_readings_do_not_qualify():
+    collector = ReadingCollector(measurement_id=5)
+    for _ in range(6):
+        collector.add(None, 70.0, None)  # pulse only
+    assert collector.finalize() is None
